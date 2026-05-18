@@ -21,11 +21,10 @@ def init_db(db_path: str) -> Database:
     """创建数据库连接并初始化表结构。"""
     db = Database(db_path)
 
-    # 实体表
+    # 实体表 —— 以 name 为主键，不再使用自增 id
     db.execute("""
         CREATE TABLE IF NOT EXISTS entities (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL UNIQUE,
+            name TEXT PRIMARY KEY,
             type TEXT NOT NULL,
             attributes TEXT,
             current_status TEXT,
@@ -79,8 +78,7 @@ def init_db(db_path: str) -> Database:
 
 # ---------- MCP 工具函数 ----------
 def _entity_exists(db: Database, name: str) -> bool:
-    """检查实体是否存在。"""
-    return db["entities"].count_where("name = ?", [name]) > 0
+    return db["entities"].get(name) is not None
 
 
 def _format_attributes(attributes_json: str | None) -> str:
@@ -122,33 +120,29 @@ def _build_relations_text(db: Database, entity_name: str) -> str:
 # ---------- 工具实现 ----------
 async def upsert_character(db: Database, name: str, attributes: str | None = None,
                            current_status: str | None = None) -> str:
-    """创建或更新角色实体。"""
-    # 规范化 attributes
-    attr_str = attributes if attributes else None
-    # 若提供了 attributes 字符串，尝试解析以验证 JSON 合法性
-    if attr_str:
+    if attributes:
         try:
-            json.loads(attr_str)
+            json.loads(attributes)
         except json.JSONDecodeError:
             return "错误：attributes 参数不是有效的 JSON 格式。"
 
     table = db["entities"]
-    existing = table.find_one(name=name)
+    existing = table.get(name)          # 按主键 name 查询
     now = datetime.now().isoformat()
 
     if existing:
         updates = {"updated_at": now}
-        if attr_str is not None:
-            updates["attributes"] = attr_str
+        if attributes is not None:
+            updates["attributes"] = attributes
         if current_status is not None:
             updates["current_status"] = current_status
-        table.update(name, updates)
+        table.update(name, updates)     # 主键值 = name
         return f"角色 {name} 已更新。"
     else:
         table.insert({
             "name": name,
             "type": "character",
-            "attributes": attr_str,
+            "attributes": attributes,
             "current_status": current_status,
             "created_at": now,
             "updated_at": now,
@@ -157,8 +151,7 @@ async def upsert_character(db: Database, name: str, attributes: str | None = Non
 
 
 async def get_character_info(db: Database, name: str) -> str:
-    """查询指定角色的完整信息。"""
-    row = db["entities"].find_one(name=name)
+    row = db["entities"].get(name)       # 直接用 get
     if not row:
         return f"角色 {name} 不存在。"
     lines = [
@@ -218,15 +211,14 @@ async def add_foreshadowing(db: Database, description: str, planted_chapter: int
 
 async def resolve_foreshadowing(db: Database, id: int, resolved_chapter: int,
                                 notes: str | None = None) -> str:
-    """标记伏笔为已回收。"""
     table = db["foreshadowings"]
-    row = table.find_one(id=id)
+    row = table.get(id)                  # foreshadowings 的主键是 id，直接用 get
     if not row:
         return f"错误：伏笔 ID={id} 不存在。"
     updates = {"status": "resolved", "resolved_chapter": resolved_chapter}
     if notes is not None:
         updates["notes"] = notes
-    table.update(id, updates)
+    table.update(id, updates)            # 按主键更新
     return f"伏笔 ID={id} 已标记为已回收（第{resolved_chapter}章）。"
 
 
