@@ -10,6 +10,7 @@ import os
 import sys
 import traceback
 from datetime import datetime
+from pathlib import Path
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
@@ -718,21 +719,38 @@ def create_server(db_path: str) -> Server:
 # =========================================================
 
 def parse_args():
-
-    parser = argparse.ArgumentParser(
-        description="都市言情小说 MCP 记忆服务器"
-    )
-
+    parser = argparse.ArgumentParser(description="都市言情小说 MCP 记忆服务器")
     parser.add_argument(
         "--db",
-        default=os.environ.get(
-            "NOVEL_DB_PATH",
-            "novel_memory.db"
-        ),
-        help="SQLite 数据库路径",
+        default=None,
+        help="数据库文件路径（若指定则直接使用，否则根据环境变量自动生成）",
     )
+    parser.add_argument(
+        "--db-name",
+        default="novel1.db",
+        help="数据库文件名（默认 novel1.db）",
+    )
+    args = parser.parse_args()
 
-    return parser.parse_args()
+    if args.db is None:
+        # 优先使用环境变量
+        project_root = os.environ.get("REASONIX_PROJECT_ROOT")
+        if project_root:
+            root_path = Path(project_root).resolve()
+        else:
+            # 其次尝试当前工作目录（Reasonix 可能已经 cd 到项目目录）
+            root_path = Path.cwd().resolve()
+
+        # 检查 .reasonix 是否存在
+        if (root_path / ".reasonix").is_dir():
+            db_dir = root_path / ".reasonix" / "memory"
+            db_dir.mkdir(parents=True, exist_ok=True)
+            args.db = str(db_dir / args.db_name)
+        else:
+            # 最后的回退：当前目录下直接创建数据库
+            args.db = str(root_path / args.db_name)
+
+    return args
 
 
 async def main():
