@@ -1,47 +1,99 @@
-"""
-MCP 启动器 —— 自动根据当前项目根目录选择数据库，
-然后启动真正的 MCP 服务器 xy_novel_memory.py。
-"""
+# xy_novel_memory_launcher.py
+from __future__ import annotations
 
+import argparse
 import os
 import sys
 from pathlib import Path
 
-def find_project_root(start: Path) -> Path:
-    """向上查找第一个包含 .reasonix 的目录作为项目根目录"""
-    cur = start.resolve()
-    for p in [cur, *cur.parents]:
-        if (p / ".reasonix").is_dir():
-            return p
+
+TOOL_DIR = Path(__file__).resolve().parent
+SERVER_SCRIPT = TOOL_DIR / "xy_novel_memory.py"
+DEFAULT_DB_NAME = "novel1.db"
+
+
+def find_project_root(explicit: str | None = None) -> Path:
+    """
+    优先级：
+    1) --project-root 显式指定
+    2) 环境变量 REASONIX_PROJECT_ROOT
+    3) 当前工作目录及父目录中查找 .reasonix
+    """
+
+    if explicit:
+        root = Path(explicit).expanduser().resolve()
+        if (root / ".reasonix").exists():
+            return root
+        raise RuntimeError(f"指定的项目根目录不存在 .reasonix：{root}")
+
+    env_root = os.environ.get("REASONIX_PROJECT_ROOT")
+    if env_root:
+        root = Path(env_root).expanduser().resolve()
+        if (root / ".reasonix").exists():
+            return root
+        raise RuntimeError(f"环境变量 REASONIX_PROJECT_ROOT 指向的目录不存在 .reasonix：{root}")
+
+    cwd = Path.cwd().resolve()
+
+    if (cwd / ".reasonix").exists():
+        return cwd
+
+    for parent in [cwd, *cwd.parents]:
+        if (parent / ".reasonix").exists():
+            return parent
+
     raise RuntimeError(
-        f"❌ 无法在 {start} 及其父目录中找到 .reasonix 项目目录。"
-        f"请确保在 Reasonix 项目内运行。"
+        "无法定位 Reasonix 项目根目录。"
+        "请设置 REASONIX_PROJECT_ROOT，或通过 --project-root 传入项目根目录。"
     )
 
-def main():
-    # 1. 找到当前项目根目录（假设 Reasonix 启动 MCP 时的 cwd 就是项目目录）
-    try:
-        project_root = find_project_root(Path.cwd())
-    except RuntimeError as e:
-        print(str(e), file=sys.stderr)
-        sys.exit(1)
 
-    # 2. 构建该项目专属的数据库路径
-    db_path = project_root / ".reasonix" / "memory" / "novel1.db"
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Reasonix 小说 MCP 启动器")
+    parser.add_argument(
+        "--project-root",
+        default=None,
+        help="Reasonix 项目根目录，例如 F:/books/AI所闻/01",
+    )
+    parser.add_argument(
+        "--db-name",
+        default=DEFAULT_DB_NAME,
+        help="数据库文件名，默认 novel1.db",
+    )
+    parser.add_argument(
+        "--db",
+        default=None,
+        help="直接指定数据库完整路径；指定后会覆盖 --project-root / --db-name",
+    )
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+
+    if args.db:
+        db_path = Path(args.db).expanduser().resolve()
+    else:
+        project_root = find_project_root(args.project_root)
+        db_path = project_root / ".reasonix" / "memory" / args.db_name
+
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # 3. 启动真正的 MCP 服务器，替换当前进程
-    server_script = Path(__file__).parent / "xy_novel_memory.py"
+    if not SERVER_SCRIPT.exists():
+        raise FileNotFoundError(f"找不到服务器脚本：{SERVER_SCRIPT}")
+
+    print(f"[xy_novel_memory_launcher] DB = {db_path}", file=sys.stderr)
+
     os.execv(
         sys.executable,
         [
             sys.executable,
-            str(server_script),
+            str(SERVER_SCRIPT),
             "--db",
             str(db_path),
         ],
     )
 
+
 if __name__ == "__main__":
     main()
-    
