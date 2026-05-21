@@ -5,12 +5,50 @@ Markdown 文件合并工具
 用法:
   python append_md.py A.md B.md
   python append_md.py --dir <目录> [-o 输出文件]
+
+修复内容：
+  1. 目录模式排序采用自然顺序（按章节号升序，同章节主文件在前）
+  2. 被合并文件若无标题（首行非#开头），自动插入 `# 文件名` 作为标题
 """
 
 import argparse
+import re
 import sys
 from pathlib import Path
 from datetime import datetime
+
+
+def sort_key(file_path: Path):
+    """
+    自定义排序键，用于文件名如 'chapter-001.md', 'chapter-001-status.md' 的自然排序。
+    提取数字部分，主文件优先，其余按后缀排序；不符合规则的文件排在最后。
+    """
+    name = file_path.stem  # 去掉扩展名
+    match = re.match(r"chapter-(\d+)", name)
+    if match:
+        num = int(match.group(1))
+        suffix = name[match.end():]   # 剩余部分，例如 "-status" 或 ""
+        is_main = (suffix == "")
+        # 元组：(数字, 是否非主文件, 后缀) -> 数字升序，主文件(False)优先，后缀按字母序
+        return (num, not is_main, suffix)
+    else:
+        # 不匹配的文件（如 README）放在最后
+        return (float('inf'), False, name)
+
+
+def ensure_title(content: str, file_stem: str) -> str:
+    """
+    如果内容不以 # 开头（不计前导空白），则在最前面添加 `# file_stem` 作为标题。
+    否则保持原样。
+    """
+    stripped = content.lstrip()
+    if stripped and stripped[0] == '#':
+        # 已有标题，不做修改
+        return content
+    else:
+        title_line = f"# {file_stem}\n"
+        # 保留原始内容（可能为空或带空白）
+        return title_line + (content if content else "")
 
 
 def append_file(file_a: str, file_b: str) -> None:
@@ -25,6 +63,9 @@ def append_file(file_a: str, file_b: str) -> None:
     except Exception as e:
         print(f"读取 {file_b} 失败: {e}", file=sys.stderr)
         sys.exit(1)
+
+    # ---- 新增：检查并补全标题 ----
+    content_b = ensure_title(content_b, Path(file_b).stem)
 
     try:
         with open(file_a, 'a', encoding='utf-8') as fa:
@@ -44,7 +85,8 @@ def merge_directory(dir_path: str, output_path: str = None) -> None:
         print(f"错误：目录不存在 - {base_dir}", file=sys.stderr)
         sys.exit(1)
 
-    md_files = sorted(base_dir.glob('*.md'))
+    # ---- 修改：使用自然排序 ----
+    md_files = sorted(base_dir.glob('*.md'), key=sort_key)
     if not md_files:
         print(f"警告：目录 {base_dir} 中没有找到 .md 文件", file=sys.stderr)
         return
@@ -63,6 +105,10 @@ def merge_directory(dir_path: str, output_path: str = None) -> None:
                 except Exception as e:
                     print(f"警告：读取 {md_file.name} 失败: {e}，已跳过", file=sys.stderr)
                     continue
+
+                # ---- 新增：检查并补全标题 ----
+                content = ensure_title(content, md_file.stem)
+
                 if i > 0:
                     outfile.write('\n')   # 文件之间加空行分隔
                 outfile.write(content)
