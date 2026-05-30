@@ -1,9 +1,32 @@
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 B站评论数据格式转换脚本
-功能：为各行添加前缀标签，删除"点击前往"行，支持评论多行和缺失行
+
+功能：为各行添加前缀标签，删除"点击前往"行，支持评论多行和缺失行。
+
+输入格式（每个记录）：
+  视频标题
+  UP主名
+  评论内容（可能多行多段）
+  点赞数（纯数字）
+  回复数（纯数字）
+  时间
+  BV号
+  点击前往（可能缺失，会被删除）
+
+输出格式（每个记录）：
+  视频：{标题}
+  up主：{UP主名}
+  评论：{评论第一行}
+  {评论剩余行}
+  点赞此评论数：{点赞数}
+  回复此评论数：{回复数}
+  时间：{时间}
+  视频bv号：{BV号}
 """
 
+import argparse
 import sys
 
 
@@ -94,12 +117,18 @@ def process_file(input_path, output_path):
     print(f'处理完成，已保存至：{output_path}')
 
 
-if __name__ == '__main__':
-    if len(sys.argv) < 3:
-        print('用法：python process_comments.py <输入文件> <输出文件>')
-        print('示例：python process_comments.py input.txt output.txt')
-        sys.exit(1)
+def main():
+    parser = argparse.ArgumentParser(
+        description='B站评论数据格式转换工具：为各行添加前缀标签，删除"点击前往"行，支持评论多行和缺失行。',
+        epilog='示例：python process_comments.py input.txt output.txt',
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument('input', help='输入文件路径（UTF-8编码）')
+    parser.add_argument('output', help='输出文件路径')
 
-    input_file = sys.argv[1]
-    output_file = sys.argv[2]
-    process_file(input_file, output_file)
+    args = parser.parse_args()
+    process_file(args.input, args.output)
+
+
+if __name__ == '__main__':
+    main()
