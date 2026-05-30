@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 B站评论数据格式转换脚本
@@ -27,7 +26,6 @@ B站评论数据格式转换脚本
 """
 
 import argparse
-import sys
 
 
 def process_file(input_path, output_path):
