@@ -62,8 +62,8 @@ class MarkdownHeadingProcessor:
         """计算统一的等级偏移量，若无标题返回 None"""
         if not self.headings:
             return None
-        max_level = max(h.original_level for h in self.headings)
-        return target_level - max_level
+        highest_level = min(h.original_level for h in self.headings)
+        return target_level - highest_level
 
     def validate_and_transform(
         self,
