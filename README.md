@@ -4,7 +4,7 @@
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Status](https://img.shields.io/badge/status-active-brightgreen)
 
-**xinyan的工具包，code with deepseek。**
+**xinyan的工具包，coding with deepseek。**
 一个高效、实用的Python工具集合，专注于文本处理和智能创作辅助。
 
 ## 📋 目录
